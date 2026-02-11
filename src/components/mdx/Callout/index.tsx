@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { PropsWithChildren } from "react";
 
 import * as Icon from "./Icons";
@@ -12,7 +13,7 @@ interface CalloutProps extends PropsWithChildren {
 
 interface IconType {
   [key: string]: {
-    icon: () => JSX.Element;
+    icon: () => ReactNode;
     boxClass: string;
   };
 }
