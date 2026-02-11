@@ -31,6 +31,8 @@ jobs:
         run: yarn install --frozen-lockfile
 
       - name: Build
+        env:
+          NEXT_PUBLIC_BASE_PATH: /TIL
         run: yarn build
 
       - name: Add .nojekyll
