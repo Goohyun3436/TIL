@@ -125,3 +125,55 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer components {
+  figure[data-rehype-pretty-code-figure] {
+    margin-block: 1.5rem;
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    background: #22272e;
+    box-shadow: 0 16px 40px -28px rgb(15 23 42 / 0.45);
+  }
+
+  figure[data-rehype-pretty-code-figure] pre[data-theme] {
+    margin: 0;
+    overflow-x: auto;
+    padding: 1rem 1.25rem;
+    border-radius: 0;
+    background-color: var(--shiki-dark-bg) !important;
+    color: var(--shiki-dark) !important;
+  }
+
+  figure[data-rehype-pretty-code-figure] code[data-theme] {
+    display: grid;
+    min-width: 100%;
+    font-family: var(--font-geist-mono);
+    font-size: 0.9rem;
+    line-height: 1.7;
+    color: var(--shiki-dark) !important;
+    background: transparent !important;
+  }
+
+  figure[data-rehype-pretty-code-figure] code[data-theme] [data-line] {
+    padding-inline: 0.125rem;
+  }
+
+  figure[data-rehype-pretty-code-figure] code[data-theme] span {
+    color: var(--shiki-dark) !important;
+    background: transparent !important;
+  }
+
+  figure[data-rehype-pretty-code-figure] [data-highlighted-line] {
+    background: color-mix(in oklab, var(--shiki-dark-bg) 82%, #60a5fa 18%);
+    border-left: 3px solid #60a5fa;
+    margin-inline: -1.25rem;
+    padding-inline: calc(1.25rem - 3px) 1.25rem;
+  }
+
+  figure[data-rehype-pretty-code-figure] [data-highlighted-chars] {
+    border-radius: 0.375rem;
+    background: color-mix(in oklab, var(--shiki-dark-bg) 70%, #f59e0b 30%);
+    box-shadow: 0 0 0 1px color-mix(in oklab, var(--shiki-dark-bg) 48%, #f59e0b 52%);
+  }
+}
