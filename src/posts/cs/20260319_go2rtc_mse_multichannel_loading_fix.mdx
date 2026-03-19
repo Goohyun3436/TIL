@@ -55,17 +55,20 @@ tags: ["go2rtc", "mse", "streaming", "webrtc", "video"]
 
 go2rtc의 **video-rtc.js**에서 MSE 흐름은 대략 아래 순서로 진행된다.
 
-1. **onmse()**에서 **MediaSource** 또는 **ManagedMediaSource**를 만든다.
+1. <strong>onmse()</strong>에서 <strong>MediaSource</strong> 또는
+   <strong>ManagedMediaSource</strong>를 만든다.
 
-2. **sourceopen** 시점에 브라우저가 지원하는 코덱 목록을 서버에 보낸다.
+2. <strong>sourceopen</strong> 시점에 브라우저가 지원하는 코덱 목록을 서버에
+   보낸다.
 
 3. 서버가 **type: "mse"** 메시지와 함께 최종 코덱 문자열을 내려준다.
 
-4. 클라이언트는 **ms.addSourceBuffer(msg.value)**로 **SourceBuffer**를 만든다.
+4. 클라이언트는 <strong>ms.addSourceBuffer(msg.value)</strong>로 <strong>SourceBuffer</strong>를 만든다.
 
-5. 이후 WebSocket으로 들어오는 fMP4 조각을 **appendBuffer**로 적재한다.
+5. 이후 WebSocket으로 들어오는 fMP4 조각을 <strong>appendBuffer</strong>로 적재한다.
 
-6. **updateend** 시점마다 버퍼 상태를 보고 트리밍, 라이브 범위 유지, 시킹, 재생 속도 조절을 수행한다.
+6. <strong>updateend</strong> 시점마다 버퍼 상태를 보고 트리밍, 라이브 범위
+   유지, 시킹, 재생 속도 조절을 수행한다.
 
 <br />
 
@@ -153,9 +156,9 @@ go2rtc의 **video-rtc.js**에서 MSE 흐름은 대략 아래 순서로 진행된
 
 두 번째는 pending buffer overflow 문제이다.
 
-- **appendBuffer**가 밀리면 queue가 쌓임.
+- <strong>appendBuffer</strong>가 밀리면 queue가 쌓임.
 
-- **updateend**에서 flush 실패 시 누적 길이가 유지됨.
+- <strong>updateend</strong>에서 flush 실패 시 누적 길이가 유지됨.
 
 - 이후 새 binary chunk가 계속 들어오면 결국 임시 버퍼(2MB)를 넘김.
 
@@ -205,7 +208,7 @@ go2rtc의 **video-rtc.js**에서 MSE 흐름은 대략 아래 순서로 진행된
 
 - **BUF_MAX**: pending buffer가 한계를 넘기면 억지로 유지하지 않고 드롭 후 재연결한다.
 
-이 구조로 바꾸면서 **updateend**에서 하는 일도 더 명확해졌다.
+이 구조로 바꾸면서 <strong>updateend</strong>에서 하는 일도 더 명확해졌다.
 
 1. pending buffer flush를 먼저 시도한다.
 
@@ -213,23 +216,15 @@ go2rtc의 **video-rtc.js**에서 MSE 흐름은 대략 아래 순서로 진행된
 
 3. 최근 5초만 유지하도록 과거 버퍼를 제거한다.
 
-4. **setLiveSeekableRange(start, end)**로 라이브 범위를 맞춘다.
+4. <strong>setLiveSeekableRange(start, end)</strong>로 라이브 범위를 맞춘다.
 
-5. 현재 시간이 너무 뒤로 밀리면 **seekToLive(min)**으로 당긴다.
+5. 현재 시간이 너무 뒤로 밀리면 <strong>seekToLive(min)</strong>으로 당긴다.
 
 6. **playbackRate**는 **1.0**으로 유지한다.
 
 7. **gap < MIN_GAP_SEC**이면 underflow 방지를 위해 점프한다.
 
 8. **gap > MAX_GAP_SEC**이면 지연 누적 방지를 위해 점프한다.
-
-<br />
-
-## 느낀 점
-
-- 처음에는 다채널 부하 테스트에서는 스트리밍 서버의 리소스에서 한계를 느낄 줄 알았지만, 실제로 시간을 가장 많이 쓴 부분은 브라우저가 왜 **waiting**으로 빠지는지 이해하는 과정이었다.
-
-- 오픈소스 플레이어를 그대로 믿고 쓰기보다, 우리 서비스 목적에 맞게 커스텀하며 불필요한 것들을 다이어트 시키는 작업의 중요성을 느꼈다.
 
 <br />
 
@@ -466,6 +461,14 @@ this.onmessage["mse"] = (msg) => {
   };
 };
 ```
+
+<br />
+
+## 느낀 점
+
+- 처음에는 다채널 부하 테스트에서는 스트리밍 서버의 리소스에서 한계를 느낄 줄 알았지만, 실제로 시간을 가장 많이 쓴 부분은 브라우저가 왜 **waiting**으로 빠지는지 이해하는 과정이었다.
+
+- 오픈소스 플레이어를 그대로 믿고 쓰기보다, 우리 서비스 목적에 맞게 커스텀하며 불필요한 것들을 다이어트 시키는 작업의 중요성을 느꼈다.
 
 <br />
 
