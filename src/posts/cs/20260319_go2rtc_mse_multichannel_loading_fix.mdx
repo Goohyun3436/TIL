@@ -1,0 +1,480 @@
+---
+title: "go2rtc MSE 다채널 테스트와 무한 로딩 분석 및 해결"
+date: "2026-03-19"
+tags: ["go2rtc", "mse", "streaming", "webrtc", "video"]
+---
+
+## Overview
+
+- WebRTC 기능을 개발하여 사내 스트리밍 서버에 패키징하는 업무를 맡았다.
+
+- 여러 오픈소스를 검토 후에, go 기반이라 실시간 처리에 유리하고 대부분의 기능을 지원하며 Windows에서 exe 형태로 빠르게 배포 가능한 [go2rtc](https://github.com/AlexxIT/go2rtc)를 사용하기로 했다.
+
+- Windows PC 내에서 다채널 관제 가능 여부에 대한 부하 테스트를 진행하던 중에, 브라우저에서 발생한 go2rtc MSE 무한 로딩의 원인을 추적하고, go2rtc의 MSE 제어 방식을 관제 특성에 맞게 커스텀하는 작업 내용을 아래에 정리한다.
+
+- 이번 문서는 다채널 테스트 결과는 아주 간략하게 정리하고, **MSE 동작 구조**, **networkState / readyState 해석**, **무한 로딩 원인**, **video-rtc.js 제어 방식 교체**를 중심으로 정리한다.
+
+<br />
+
+## 테스트 환경
+
+| 구분           | 내용                                                                                 |
+| -------------- | ------------------------------------------------------------------------------------ |
+| 서버 장비      | **WindowsPC2**                                                                       |
+| 서버 장비 사양 | **Intel N100**, **Intel UHD Graphics**, **RAM 16GB**                                 |
+| 재생 장비      | **WindowsPC1**                                                                       |
+| 재생 장비 사양 | **12th Gen Intel Core i5-12400**, **Intel UHD Graphics 730**, **RAM 16GB**           |
+| 스트림 조건    | **H.264**, **30fps**, **1920x1080(FHD)**, **MSE**, **Chrome**                        |
+| 해상도 구간    | **FHD(1920x1080)**, **SD(640x360)**, **LD(320x240)**                                 |
+| 채널 수        | **1 / 4 / 9 / 16**                                                                   |
+| 테스트 방식    | **WindowsPC2**에서 go2rtc 서버 실행, **WindowsPC1**에서 Chrome MSE 재생              |
+| 분리 이유      | 서버와 클라이언트를 분리해 실제 환경에 가깝게 네트워크 요소까지 함께 테스트하기 위함 |
+
+<br />
+
+## 다채널 테스트 결과 요약
+
+| 채널 수 | 최소 권장 사양                      | 안정 권장 사양                                            | 예상 사용률                                      |
+| ------- | ----------------------------------- | --------------------------------------------------------- | ------------------------------------------------ |
+| 4       | **i3 10세대 이상 / 8GB / UHD 630**  | **i3 10세대 이상 / 8GB / UHD 630**                        | **GPU 12%**, **RAM 2~3GB**, **CPU 5~10%**        |
+| 9       | **i5 10세대 이상 / 16GB / UHD 730** | **i5 10세대 이상 / 16GB / Iris Xe**                       | **GPU 25~30%**, **RAM 4~5GB**, **CPU 10~15%**    |
+| 16      | **i5-12400 이상 / 16GB / UHD 730**  | **i5-12400 이상 / 32GB / Iris Xe Max 또는 GTX 1650 이상** | **GPU 35~44%**, **RAM 5.9~9.3GB**, **CPU 8~19%** |
+
+| 해상도             | 유지 시간 | CPU Avg | CPU Peak | GPU Decode | GPU 3D  | GPU Memory | RAM       | 프레임 드랍 | 끊김/재연결 |
+| ------------------ | --------- | ------- | -------- | ---------- | ------- | ---------- | --------- | ----------- | ----------- |
+| **FHD(1920x1080)** | **10분**  | **10%** | **18%**  | **40%**    | **42%** | **3.2GB**  | **9.3GB** | **X**       | **X**       |
+| **FHD(1920x1080)** | **30분**  | **10%** | **19%**  | **43%**    | **44%** | **2.7GB**  | **7.7GB** | **X**       | **X**       |
+| **SD(640x360)**    | **10분**  | **8%**  | **15%**  | **12%**    | **37%** | **1.0GB**  | **6.0GB** | **X**       | **X**       |
+| **LD(320x240)**    | **10분**  | **8%**  | **13%**  | **9%**     | **35%** | **0.8GB**  | **5.9GB** | **X**       | **X**       |
+
+다채널 테스트만 놓고 보면 **i5-12400 + UHD 730 + 16GB RAM** 조합에서 16채널 MSE 재생은 유지 가능해 보였다. 하지만 실제 사용자 관점에서는 브라우저 무한 로딩이 발생했고, 문제의 핵심은 평균 리소스 사용률보다 **MSE 버퍼와 재생 제어 방식**에 있었다.
+
+<br />
+
+## MSE 코드 분석
+
+go2rtc의 **video-rtc.js**에서 MSE 흐름은 대략 아래 순서로 진행된다.
+
+1. **onmse()**에서 **MediaSource** 또는 **ManagedMediaSource**를 만든다.
+
+2. **sourceopen** 시점에 브라우저가 지원하는 코덱 목록을 서버에 보낸다.
+
+3. 서버가 **type: "mse"** 메시지와 함께 최종 코덱 문자열을 내려준다.
+
+4. 클라이언트는 **ms.addSourceBuffer(msg.value)**로 **SourceBuffer**를 만든다.
+
+5. 이후 WebSocket으로 들어오는 fMP4 조각을 **appendBuffer**로 적재한다.
+
+6. **updateend** 시점마다 버퍼 상태를 보고 트리밍, 라이브 범위 유지, 시킹, 재생 속도 조절을 수행한다.
+
+<br />
+
+그리고 데이터 흐름은 아래와 같은 순서로 진행된다.
+
+**RTSP Source -> go2rtc(remux) -> WebSocket binary fMP4 -> MediaSource -> SourceBuffer -> Browser decoder/render**
+
+<br />
+
+즉, JavaScript가 직접 디코딩하는 구조가 아니라, JavaScript는 버퍼 적재와 재생 위치 제어를 담당하고 실제 디코딩은 브라우저 엔진이 맡는다.
+
+<br />
+
+## readyState, networkState
+
+브라우저 콘솔 로그에서 볼 수 있는 **networkState**와 **readyState**를 MSE 이벤트 발생 지점과 함께 보면서 무한 로딩을 디버깅했다.
+
+**networkState**
+
+- **0 = NETWORK_EMPTY**: 아직 source가 초기화되지 않은 상태
+
+- **1 = NETWORK_IDLE**: 네트워크 요청이 없는 상태
+
+- **2 = NETWORK_LOADING**: 데이터 로딩 중인 상태
+
+- **3 = NETWORK_NO_SOURCE**: 사용할 소스를 찾지 못한 상태
+
+**readyState**
+
+- **0 = HAVE_NOTHING**: 아직 아무 데이터도 없음
+
+- **1 = HAVE_METADATA**: 메타데이터만 있음
+
+- **2 = HAVE_CURRENT_DATA**: 현재 프레임만 있고 다음 프레임은 보장되지 않음
+
+- **3 = HAVE_FUTURE_DATA**: 잠깐은 더 재생 가능
+
+- **4 = HAVE_ENOUGH_DATA**: 충분한 데이터를 가지고 있음
+
+<br />
+
+## go2rtc 브라우저 디버깅 환경 세팅
+
+브라우저 무한 로딩 문제를 보기 위해 **go2rtc stream.html** 기준의 로컬 디버깅 환경을 따로 구성했다.
+
+1. go2rtc 오픈소스 zip 다운로드
+
+2. **www** 폴더만 로컬 PC에 별도로 세팅
+
+3. **go2rtc.exe**의 **static_dir**을 로컬 **www** 경로로 지정(go2rtc.yaml)
+
+4. **streams**에 16채널 등록(go2rtc.yaml)
+
+5. **stream.html?src=testN&mode=mse** 형태로 여러 채널을 동시에 띄우며 **waiting**, **stalled**, **seeking**, **playing**, **error** 이벤트와 **buffered/currentTime/playbackRate** 상태 분석
+
+<br />
+
+## 브라우저 무한 로딩 원인
+
+가장 명확했던 문제는 두 가지였다.
+
+1. 과속 재생 케이스
+   - **playbackRate**가 과하게 올라가 버퍼가 있는데도 **waiting**처럼 보이는 문제
+
+2. buffer overflow
+   - 2MB 임시 버퍼가 넘치면서 **RangeError: offset is out of bounds**가 발생하는 문제
+
+<br />
+
+먼저 과속 재생 케이스에서는 다음 로그가 확인됐다.
+
+- **buffered = [379.37, 383.47]** -> 버퍼 충분히 존재
+
+- **currentTime = 381.16** -> 버퍼 내에 time 헤드 있음
+
+- **networkState = 2** -> MSE 수신 중
+
+- **readyState = 2** -> 다음 프레임이 없음(곧 멈출 수 있음)
+
+- **playbackRate ≈ 2 ~ 2.3** -> 영상 배속 비율
+
+즉, 재생 속도가 과하게 올라가면서 버퍼를 너무 빨리 소비해 다음 프레임 공급을 못 따라가는 상태였다.
+
+<br />
+
+두 번째는 pending buffer overflow 문제이다.
+
+- **appendBuffer**가 밀리면 queue가 쌓임.
+
+- **updateend**에서 flush 실패 시 누적 길이가 유지됨.
+
+- 이후 새 binary chunk가 계속 들어오면 결국 임시 버퍼(2MB)를 넘김.
+
+- overflow 이후에는 사용자가 보기엔 그냥 무한 로딩처럼 느껴짐.
+
+즉, **MSE append 지연 + pending buffer 누적 + 복구 로직 부족**이 합쳐진 문제였다.
+
+<br />
+
+## 무한 로딩을 해결하기 위한 제어 방식 커스텀
+
+나의 설계안은 아래와 같다.
+
+- go2rtc 의 MSE 구현은 **gap = end - currentTime** 값을 봄.
+
+- 그 gap을 바탕으로 **playbackRate**를 계속 바꿈.
+
+- 버퍼 양쪽 끝과 현재 위치 사이의 차이를 속도 조절로 맞추는 제어 방식.
+
+- 보통 영상 관제 시스템에서는 시간 정확성 보다는 끊김 없는 안정성을 택함.
+
+- playbackRate를 1.0으로 고정하고 버퍼 밀리면 프레임 드롭 하는 방식으로 교체.
+
+<br />
+
+## 커스텀한 핵심 파라미터
+
+이후 코드에서는 아래 파라미터를 기준으로 제어했다.
+
+- **FIXED_RATE = 1.0**
+
+- **MIN_GAP_SEC = 0.30**
+
+- **JUMP_BEHIND_LIVE_SEC = 0.80**
+
+- **MAX_GAP_SEC = 2.00**
+
+- **BUF*MAX = 2 * 1024 \_ 1024**
+
+의미는 아래처럼 정리했다.
+
+- **MIN_GAP_SEC**: live edge에 너무 바짝 붙어 underflow 직전이면 약간 뒤로 점프해서 버퍼를 확보한다.
+
+- **JUMP_BEHIND_LIVE_SEC**: 점프할 때 live edge 바로 위가 아니라, 약간 뒤 지점으로 붙어 안정적으로 재생한다.
+
+- **MAX_GAP_SEC**: 지연이 너무 커졌으면 다시 따라잡는다.
+
+- **BUF_MAX**: pending buffer가 한계를 넘기면 억지로 유지하지 않고 드롭 후 재연결한다.
+
+이 구조로 바꾸면서 **updateend**에서 하는 일도 더 명확해졌다.
+
+1. pending buffer flush를 먼저 시도한다.
+
+2. 실패하면 **bufLen = 0**으로 끊고 WebSocket을 닫아 재연결한다.
+
+3. 최근 5초만 유지하도록 과거 버퍼를 제거한다.
+
+4. **setLiveSeekableRange(start, end)**로 라이브 범위를 맞춘다.
+
+5. 현재 시간이 너무 뒤로 밀리면 **seekToLive(min)**으로 당긴다.
+
+6. **playbackRate**는 **1.0**으로 유지한다.
+
+7. **gap < MIN_GAP_SEC**이면 underflow 방지를 위해 점프한다.
+
+8. **gap > MAX_GAP_SEC**이면 지연 누적 방지를 위해 점프한다.
+
+<br />
+
+## 느낀 점
+
+- 처음에는 다채널 부하 테스트에서는 스트리밍 서버의 리소스에서 한계를 느낄 줄 알았지만, 실제로 시간을 가장 많이 쓴 부분은 브라우저가 왜 **waiting**으로 빠지는지 이해하는 과정이었다.
+
+- 오픈소스 플레이어를 그대로 믿고 쓰기보다, 우리 서비스 목적에 맞게 커스텀하며 불필요한 것들을 다이어트 시키는 작업의 중요성을 느꼈다.
+
+<br />
+
+## 코드 수정 부분
+
+기존 코드는 **gap** 값에 따라 **playbackRate**를 계속 올리거나 낮추는 구조였다. 일반적인 라이브 재생에서는 지연을 줄이는 데 도움이 될 수 있지만, 관제 화면처럼 다채널을 오래 띄워두는 환경에서는 오히려 버퍼를 과하게 소모해 **waiting**으로 빠지는 원인이 될 수 있었다.
+
+그래서 이후 코드는 **playbackRate를 1.0으로 고정**하고, 대신 **버퍼가 너무 얇아지거나 너무 두꺼워졌을 때 점프해서 복구**하는 방식으로 바꿨다. 또 **pending buffer overflow**가 발생하면 억지로 유지하지 않고 재연결해서 라이브 관제 기준의 안정성을 우선하도록 수정했다.
+
+이전 코드
+
+```js
+this.onmessage["mse"] = (msg) => {
+  if (msg.type !== "mse") return;
+
+  this.mseCodecs = msg.value;
+
+  const sb = ms.addSourceBuffer(msg.value);
+  sb.mode = "segments"; // segments or sequence
+  sb.addEventListener("updateend", () => {
+    if (!sb.updating && bufLen > 0) {
+      try {
+        const data = buf.slice(0, bufLen);
+        sb.appendBuffer(data);
+        bufLen = 0;
+      } catch (e) {
+        console.debug("[VideoRTC][MSE] updateend but NO buffered", e);
+      }
+    }
+
+    if (!sb.updating && sb.buffered && sb.buffered.length) {
+      const end = sb.buffered.end(sb.buffered.length - 1);
+      const start = end - 5;
+      const start0 = sb.buffered.start(0);
+      if (start > start0) {
+        // console.debug('[VideoRTC][MSE] trim', {from: start0.toFixed(2), to: start.toFixed(2)});
+        sb.remove(start0, start);
+        ms.setLiveSeekableRange(start, end);
+      }
+      if (this.video.currentTime < start) {
+        console.debug("[VideoRTC][MSE] seekToLive", { to: start.toFixed(2) });
+        this.video.currentTime = start;
+      }
+      const gap = end - this.video.currentTime;
+      const nextRate = gap > 0.1 ? gap : 0.1;
+      // console.debug('[VideoRTC][MSE] rate', {nextRate});
+      this.video.playbackRate = nextRate;
+      // console.debug('VideoRTC.buffered', gsap, this.video.playbackRate, this.video.readyState);
+    }
+  });
+
+  const buf = new Uint8Array(2 * 1024 * 1024);
+  let bufLen = 0;
+  const BUF_MAX = buf.byteLength;
+
+  this.ondata = (data) => {
+    if (sb.updating || bufLen > 0) {
+      try {
+        const b = new Uint8Array(data);
+
+        // bounds check (BUF_MAX)
+        if (bufLen + b.byteLength > BUF_MAX) {
+          console.debug("[VideoRTC][MSE] buf overflow -> drop & reconnect", {
+            bufLen,
+            incoming: b.byteLength,
+            BUF_MAX,
+          });
+          bufLen = 0;
+
+          // ws 재연결
+          if (this.ws) this.ws.close();
+          return;
+        }
+
+        buf.set(b, bufLen);
+        bufLen += b.byteLength;
+      } catch (e) {
+        console.debug("[VideoRTC][MSE] buffer set FAIL", e.name, e.message, {
+          bufLen,
+        });
+        bufLen = 0;
+        // ws 재연결
+        if (this.ws) this.ws.close();
+      }
+    } else {
+      try {
+        sb.appendBuffer(data);
+      } catch (e) {
+        // DEBUG
+        console.debug("[VideoRTC][MSE] appendBuffer FAIL", e.name, e.message);
+        // ws 재연결
+        if (this.ws) this.ws.close();
+      }
+    }
+  };
+};
+```
+
+이후 코드
+
+```js
+this.onmessage["mse"] = (msg) => {
+  if (msg.type !== "mse") return;
+
+  this.mseCodecs = msg.value;
+
+  const sb = ms.addSourceBuffer(msg.value);
+  sb.mode = "segments"; // segments or sequence
+
+  // ====== VMS / 관제용 안정화 파라미터 ======
+  // - playbackRate는 1.0 고정 (gap 기반 제어 제거)
+  // - 버퍼가 너무 얇으면 live edge로 점프
+  // - 버퍼가 너무 두꺼워(지연 누적)도 점프
+  const FIXED_RATE = 1.0;
+  const MIN_GAP_SEC = 0.3; // underflow 방지: end-currentTime이 0.3s 미만이면 점프
+  const JUMP_BEHIND_LIVE_SEC = 0.8; // 점프할 때 live edge에서 0.8s 뒤로 붙음
+  const MAX_GAP_SEC = 2.0; // 지연 누적: gap이 2.5s 초과면 점프해서 따라잡음
+  // =========================================
+
+  sb.addEventListener("updateend", () => {
+    // 1) pending buffer flush
+    if (!sb.updating && bufLen > 0) {
+      try {
+        const data = buf.slice(0, bufLen);
+        sb.appendBuffer(data);
+        bufLen = 0;
+      } catch (e) {
+        console.debug(
+          "[VideoRTC][MSE] flush appendBuffer FAIL",
+          e.name,
+          e.message,
+          { bufLen },
+        );
+        // 라이브 관제: 누적 고착 방지
+        bufLen = 0;
+        // 반복 실패는 재연결이 가장 깔끔
+        if (this.ws) this.ws.close();
+        return;
+      }
+    }
+
+    // 2) trim + live range + seek-to-live
+    if (!sb.updating && sb.buffered && sb.buffered.length) {
+      const end = sb.buffered.end(sb.buffered.length - 1);
+      const start = end - 5;
+      const start0 = sb.buffered.start(0);
+
+      if (start > start0) {
+        sb.remove(start0, start);
+        ms.setLiveSeekableRange(start, end);
+      }
+
+      // (A) 너무 뒤로 밀린 경우: live 범위로 당김
+      if (this.video.currentTime < start) {
+        console.debug("[VideoRTC][MSE] seekToLive(min)", {
+          to: start.toFixed(2),
+        });
+        this.video.currentTime = start;
+      }
+
+      // (B) 관제용 제어: playbackRate 1.0 고정
+      if (this.video.playbackRate !== FIXED_RATE) {
+        this.video.playbackRate = FIXED_RATE;
+      }
+
+      // (C) gap 기반 점프: underflow/latency 누적 둘 다 대응
+      const gap = end - this.video.currentTime;
+
+      // underflow 직전: 너무 live edge에 붙어있으면 약간 뒤로 점프해서 버퍼를 확보
+      if (gap > 0 && gap < MIN_GAP_SEC) {
+        const to = Math.max(end - JUMP_BEHIND_LIVE_SEC, start);
+        console.debug("[VideoRTC][MSE] jump(underflow)", {
+          gap: gap.toFixed(3),
+          to: to.toFixed(2),
+          end: end.toFixed(2),
+        });
+        this.video.currentTime = to;
+      }
+
+      // 지연 누적: gap이 너무 크면 따라잡기(관제에선 지연이 커지는 걸 방지)
+      if (gap > MAX_GAP_SEC) {
+        const to = Math.max(end - JUMP_BEHIND_LIVE_SEC, start);
+        console.debug("[VideoRTC][MSE] jump(latency)", {
+          gap: gap.toFixed(3),
+          to: to.toFixed(2),
+          end: end.toFixed(2),
+        });
+        this.video.currentTime = to;
+      }
+    }
+  });
+
+  // 2MB pending buffer (WebSocket burst / sb.updating 동안 누적)
+  const buf = new Uint8Array(2 * 1024 * 1024);
+  let bufLen = 0;
+  const BUF_MAX = buf.byteLength;
+
+  this.ondata = (data) => {
+    if (sb.updating || bufLen > 0) {
+      try {
+        const b = new Uint8Array(data);
+
+        // bounds check (BUF_MAX)
+        if (bufLen + b.byteLength > BUF_MAX) {
+          console.debug("[VideoRTC][MSE] buf overflow -> drop & reconnect", {
+            bufLen,
+            incoming: b.byteLength,
+            BUF_MAX,
+          });
+          bufLen = 0;
+
+          // 재연결(라이브 관제: 드롭 후 복구가 최우선)
+          if (this.ws) this.ws.close();
+          return;
+        }
+
+        buf.set(b, bufLen);
+        bufLen += b.byteLength;
+      } catch (e) {
+        console.debug("[VideoRTC][MSE] buffer set FAIL", e.name, e.message, {
+          bufLen,
+        });
+        bufLen = 0;
+        if (this.ws) this.ws.close();
+      }
+    } else {
+      try {
+        sb.appendBuffer(data);
+      } catch (e) {
+        console.debug("[VideoRTC][MSE] appendBuffer FAIL", e.name, e.message);
+        if (this.ws) this.ws.close();
+      }
+    }
+  };
+};
+```
+
+<br />
+
+## 참고 링크
+
+- [go2rtc www/README.md](/Users/hgoo/Documents/develop/ISAAC/go2rtc/www/README.md)
+
+- [video-rtc.js](/Users/hgoo/Documents/develop/ISAAC/go2rtc/www/video-rtc.js)
+
+- [ReadyStates](https://html.spec.whatwg.org/multipage/media.html#ready-states)
+
+- [NetworkStates](https://html.spec.whatwg.org/multipage/media.html#network-states)
