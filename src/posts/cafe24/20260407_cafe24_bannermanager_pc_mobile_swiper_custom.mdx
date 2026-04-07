@@ -1,0 +1,325 @@
+---
+title: "카페24 배너매니저 PC/모바일 커스텀"
+description: "카페24 배너매니저를 PC와 모바일에 분리 적용하고, 배너가 1장일 때 버튼과 자동재생을 비활성화하는 방법을 정리했다."
+date: "2026-04-07"
+tags: ["cafe24", "bannermanager", "swiper", "css", "javascript"]
+---
+
+## Overview
+
+<img width="100%" alt="Image" src="https://github.com/user-attachments/assets/a1587e52-428c-4df3-b943-f04ec39e9028" />
+<img width="50%" alt="Image" src="https://github.com/user-attachments/assets/acea08b9-41cb-4472-9b4b-174ef8d06e65" />
+
+보통 온라인 쇼핑몰을 보면 PC와 모바일 배너를 분리해서 관리한다.
+
+쇼핑몰 관리자가 배너이미지와 이동 링크를 설정하면,
+<strong>홈페이지 배너가 자동 업데이트</strong> 되도록 도와주는 <strong>배너매니저</strong>를 커스텀하는 방법을 기록한다.
+
+- 카페24 배너매니저를 PC와 모바일에서 다르게 보이도록 함.
+- 배너의 UI 및 기능을 커스텀함.
+  - 배너가 1장만 등록된 경우 좌우 버튼과 네비게이션 버튼을 UI 에서 가림.
+  - 배너 이미지가 1장만 등록된 경우 배너이미지 자동 넘김 기능을 비활성화함.
+
+참고한 공식 가이드는 디자인플로어 <strong>배너매니저 매뉴얼</strong>이다.
+
+- [배너매니저 매뉴얼](https://dfloor.co.kr/services/bannermanager/page/read.html?no=84333&board_no=3001)
+
+<br />
+
+## 배너매니저 기본 설치
+
+디자인플로어 매뉴얼 기준으로 먼저 배너매니저 앱 스크립트가 쇼핑몰 레이아웃에 설치되어 있어야 한다.
+
+<img width="100%" alt="Image" src="https://github.com/user-attachments/assets/1a79e4c9-849c-4d3d-929f-d5714fa1b207" />
+
+<br />
+
+## 배너 그룹 구성
+
+- PC 그룹 코드: <strong>pc-001</strong>
+- 모바일 그룹 코드: <strong>mobile-001</strong>
+
+프로젝트 목록에 PC, 모바일을 추가해서 각 뷰에 보일 이미지를 분리해서 등록한다.
+
+<img width="100%" alt="Image" src="https://github.com/user-attachments/assets/c1fc79d0-51a1-4ef1-87e0-ceff522d03ad" />
+
+<br />
+
+## 카페24 레이아웃에 스크립트 코드 삽입
+
+배너매니저 매뉴얼 내용대로 PC버전, 모바일 버전 관련 레이아웃 html 코드에 배너매니저 스크립트 코드를 삽입한다.
+
+<img width="100%" alt="Image" src="https://github.com/user-attachments/assets/b44fe2ba-2ba9-4890-b445-ad3191f7c2ce" />
+<img width="100%" alt="Image" src="https://github.com/user-attachments/assets/d9f12b96-d0e5-4d7d-b87f-b3be784fd6e9" />
+<img width="100%" alt="Image" src="https://github.com/user-attachments/assets/564b0fe0-05c6-4640-902c-ac8b3995445a" />
+
+<br />
+
+## 카페24 레이아웃에 배너 UI 추가
+
+- PC 그룹 코드: <strong>pc-001</strong>
+- 모바일 그룹 코드: <strong>mobile-001</strong>
+
+카페24 > html 수정 > 전체화면보기 > 쇼핑몰 메인 (index.html) 파일의 가장 윗줄에 코드를 삽입한다.
+원하는 화면에 넣어주면된다. 이 홈페이지의 경우 메인페이지 상단에 넣는 예시이다.
+
+카페24 경로: <strong>/index.html</strong>
+
+```html
+<div class="slide_wrap slide_wrap_pc" style="margin-bottom: 120px;" data-ez="module-03uhbsq-1" data-ez-module="user-defined/1" data-ez-name="USER DEFINED" data-ez-type="plain">
+    <div class="swiper-container" id="slide-pc">
+        <div class="swiper-wrapper" df-banner-code="pc-001" hidden>
+            <div class="swiper-slide" df-banner-clone>
+                <a href="{#href}" target="{#target}">
+                    {#item}
+                </a>
+            </div>
+        </div>
+        <div class="swiper-pagination"></div>
+        <div class="swiper-button-next"></div>
+        <div class="swiper-button-prev"></div>
+    </div>
+</div>
+<div class="slide_wrap slide_wrap_mobile" style="margin-bottom: 120px;" data-ez="module-0pzt7t1-1" data-ez-module="user-defined/1" data-ez-name="USER DEFINED" data-ez-type="plain">
+    <div class="swiper-container" id="slide-mobile">
+        <div class="swiper-wrapper" df-banner-code="mobile-001" hidden>
+            <div class="swiper-slide" df-banner-clone>
+                <a href="{#href}" target="{#target}">
+                    {#item}
+                </a>
+            </div>
+        </div>
+        <div class="swiper-pagination"></div>
+        <div class="swiper-button-next"></div>
+        <div class="swiper-button-prev"></div>
+    </div>
+</div>
+```
+
+<br />
+
+## 배너 커스팀 스타일 적용
+
+카페24 > html 수정 > 전체화면보기 > 화면추가 클릭 > 아래 경로에 swiper_custom.css 추가
+카페24 경로: <strong>/layout/basic/css/swiper_custom.css</strong>
+
+<img width="300px" alt="Image" src="https://github.com/user-attachments/assets/82b725ee-5fb5-4476-8977-ce2e5e4a2343" />
+
+
+
+아래 CSS 는 PC / 모바일 노출 분리, 슬라이드 기본 스타일, 버튼 색상, pagination active 색상을 포함한다.
+
+```css
+/* PC / 모바일 노출 분리 */
+.slide_wrap_pc {
+  display: block;
+}
+
+.slide_wrap_mobile {
+  display: none;
+}
+
+@media all and (max-width: 767px) {
+  .slide_wrap_pc {
+    display: none;
+  }
+
+  .slide_wrap_mobile {
+    display: block;
+  }
+}
+
+/* 슬라이드 */
+.slide_wrap {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+}
+
+.slide_wrap::after {
+  content: '';
+  display: block;
+  clear: both;
+}
+
+.slide_wrap .swiper-wrapper,
+.slide_wrap .swiper-slide,
+.slide_wrap .swiper-slide img {
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  transform: translate3d(0, 0, 0);
+}
+
+.slide_wrap .swiper-slide {
+  position: relative;
+  width: 100%;
+  height: auto;
+  will-change: opacity, transform;
+}
+
+.slide_wrap .swiper-slide a {
+  display: block;
+  position: relative;
+  width: 100%;
+  height: auto;
+  text-decoration: none;
+}
+
+.slide_wrap .swiper-slide img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* 텍스트를 같이 쓸 경우에만 사용
+.slide_wrap .swiper-slide .banner_txt {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1.2;
+  z-index: 2;
+}
+*/
+
+/* 슬라이드 좌우 버튼 */
+#slide-pc .swiper-button-next,
+#slide-pc .swiper-button-prev,
+#slide-mobile .swiper-button-next,
+#slide-mobile .swiper-button-prev {
+  filter: invert(1) brightness(0) saturate(100%) !important;
+}
+
+/* 슬라이드 페이지네이션 액티브 */
+#slide-pc .swiper-pagination-bullet-active,
+#slide-mobile .swiper-pagination-bullet-active {
+  background: #ff0000;
+}
+```
+
+<br />
+
+## 공통 레이아웃에 CSS 연결
+
+공통 레이아웃의 `<head>` 안에 <strong>swiper_custom.css</strong> 를 추가한다.
+카페24 경로: <strong>/layout/basic/layout.html</strong>
+
+<img width="100%" alt="Image" src="https://github.com/user-attachments/assets/a8659db8-0825-494c-a872-cf3512062f14" />
+
+```html
+<!--@css(/layout/basic/css/swiper_custom.css)-->
+```
+
+<br />
+
+## main.js 에 배너매니저용 Swiper 코드 추가
+
+카페24 경로: <strong>/layout/basic/js/main.js</strong>
+
+- 아래 코드를 추가하면 <strong>#slide-pc</strong>, <strong>#slide-mobile</strong> html 요소를 각각을 찾아 배너매니저가 렌더링한 슬라이드를 Swiper 로 초기화한다.
+
+- Swiper 에 autoplay, pagination, prev/next button 을 <strong>배너이미지 수에 따라 분기하여 처리</strong>한다.
+
+```javascript
+/** 애쉬프레임_JS 210806 */
+jQuery(document).ready(function() {
+    
+    /* 배너매니저 슬라이드 */
+    function initBannerSwiper(target) {
+        var $target = jQuery(target);
+        if (!$target.length) return false;
+
+        if ($target.data('swiper-initialized')) return true;
+
+        var bannerCount = $target.find('.swiper-slide').not('.swiper-slide-duplicate').length;
+        if (bannerCount === 0) return false;
+
+        var isMultiBanner = bannerCount > 1;
+
+        new Swiper(target, {
+            effect: 'fade',
+            loop: isMultiBanner,
+            speed: 700,
+            watchOverflow: true,
+            observer: true,
+            observeParents: true,
+            autoplay: isMultiBanner ? {
+                delay: 4000,
+                disableOnInteraction: false,
+            } : false,
+            pagination: {
+                el: target + ' .swiper-pagination',
+                clickable: true,
+            },
+            navigation: {
+                nextEl: target + ' .swiper-button-next',
+                prevEl: target + ' .swiper-button-prev',
+            },
+            fadeEffect: {
+                crossFade: true
+            },
+            on: {
+                init: function () {
+                    if (!isMultiBanner) {
+                        $target.find('.swiper-pagination').hide();
+                        $target.find('.swiper-button-next').hide();
+                        $target.find('.swiper-button-prev').hide();
+                    }
+                },
+                slideChange: function () {
+                }
+            }
+        });
+
+        $target.data('swiper-initialized', true);
+        return true;
+    }
+
+    function waitAndInitBannerSwiper(target) {
+        if (initBannerSwiper(target)) return;
+
+        var timer = setInterval(function () {
+            if (initBannerSwiper(target)) {
+                clearInterval(timer);
+            }
+        }, 300);
+
+        setTimeout(function () {
+            clearInterval(timer);
+        }, 10000);
+    }
+
+    waitAndInitBannerSwiper('#slide-pc');
+    waitAndInitBannerSwiper('#slide-mobile');
+
+    ...
+```
+
+<br />
+
+## 적용 순서 정리
+
+1. PC / 모바일 배너 그룹 생성 및 세팅
+2. 배너매니저 앱 스크립트를 레이아웃에 추가
+3. 배너 UI HTML 작성
+4. <strong>/layout/basic/css/swiper_custom.css</strong> 스타일 적용
+5. <strong>/layout/basic/layout.html</strong> 에 CSS 링크
+6. <strong>/layout/basic/js/main.js</strong> 에 Swiper 기능 코드 추가
+7. PC / 모바일 각각 배너 1장, 2장 이상 케이스로 테스트
+
+<br />
+
+## 느낀 점
+
+- 카페24에 코드 커스텀 관련하여 자료가 많이 없는 것 같다.
+
+- 이 방식으로 구성하면 카페24 배너매니저를 사용해서 PC/모바일 화면별 배너 분리와 Swiper UI 제어를 커스텀 적용할 수 있다.
+
+- 특히 배너가 1장일 때 슬라이더처럼 보이지 않도록 처리한 것처럼 사용자 커스텀 기능도 동작하게 할 수 있다.
+
+<br />
+
+## 참고 링크
+- [배너매니저 매뉴얼](https://dfloor.co.kr/services/bannermanager/page/read.html?no=84333&board_no=3001)
