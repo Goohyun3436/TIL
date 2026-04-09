@@ -1,0 +1,69 @@
+---
+title: "카페24에 프리텐다드 폰트 적용하기"
+date: "2026-04-09"
+tags: ["cafe24", "font", "pretendard", "css", "layout"]
+---
+
+## Overview
+
+- 적용 전
+<img width="100%" alt="Image" src="https://github.com/user-attachments/assets/834bb8d8-cc99-4ea7-b10c-da0a03b16260" />
+
+- 적용 후
+<img width="100%" alt="Image" src="https://github.com/user-attachments/assets/bb5ca3e8-af13-4b50-a9a2-921c1ca593bd" />
+
+- [cafe24 디자인 센터 - 애쉬프레임(무료)](https://d.cafe24.com/product/product_detail?productCode=PTMD705070) 를 기준으로 프리텐다드 폰트를 카페24 사이트 전체에 적용하는 작업을 기록한다.
+
+<br />
+
+## 문제 상황
+
+처음에는 body 태그에 font-family 만 추가하면 전체 적용될 것이라고 생각했다. 하지만 카페24 템플릿 환경에서는 공통 레이아웃, 개별 화면 스타일, 에디터 영역, 버튼 스타일이 서로 나뉘어 있어서 한 군데만 수정하면 일부 화면에만 적용되는 경우가 있었다.
+
+특히 아래 같은 문제가 있었다.
+
+- 본문은 바뀌었는데 버튼이나 폼 요소는 기존 폰트가 유지되는 경우
+
+- 관리자에서 넣어둔 기존 스타일 우선순위 때문에 새 폰트가 일부만 적용되는 경우
+
+- 영문, 숫자, 한글이 섞일 때 폴백 폰트가 예상과 다르게 잡히는 경우
+
+<br />
+
+## 적용 방법
+
+공통/메인 레이아웃에 프리텐다드 CDN 링크를 넣어서 폰트 파일을 로드한다.
+
+카페24 경로: <strong>/layout/basic/layout.html</strong> , <strong>/layout/basic/main.html</strong>
+
+```html
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+```
+
+CSS 의 font-family 에 프리텐다드 폰트를 적용한다.
+
+카페24 경로: <strong>/layout/basic/css/layout.css</strong>
+
+```css
+input, select, textarea, body, code, button {font-family:"Pretendard Variable", Pretendard, "Raleway", "Noto Sans KR", Arial, sans-serif !important;}
+```
+
+<br />
+
+## 느낀 점
+
+- 카페24처럼 템플릿과 공통 스타일이 섞인 환경에서는 폰트 적용이 생각보다 단순하지 않았다.
+
+- 개발자 도구를 열어서 해당 요소가 어떤 css 파일의 영향을 받는지 확인하고, 예상이 되는 css 파일들을 하나하나 열면서 해당 css 구문을 찾아내 수정하는 식으로 적용했다.
+
+- 카페24는 커스텀이 비교적 자유롭지 않다고 했는데, html 수정만 잘 다루면 커스텀이 좀 더 자유로워질 것 같다.
+
+<br />
+
+## 참고 링크
+
+- [[카페24 쇼핑몰] 웹 폰트 적용하기](https://mint-dizan.tistory.com/76)
+
+- [pretendard 프리텐다드 웹폰트 적용하기](https://gogogam.tistory.com/124)
+
+- [Pretendard 프리텐다드](https://cactus.tistory.com/306)
