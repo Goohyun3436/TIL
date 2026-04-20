@@ -1,0 +1,92 @@
+---
+title: "카페24 상품 사진과 상품 설명 간격 커스텀"
+date: "2026-04-20"
+tags: ["cafe24", "css", "layout", "product", "frontend"]
+---
+
+## Overview
+
+- 적용 전
+<img width="100%" alt="Image" src="https://github.com/user-attachments/assets/e07a506d-6bfe-4d32-932f-5d36aefa7cb0" />
+
+- 적용 후
+<img width="100%" alt="Image" src="https://github.com/user-attachments/assets/4c3e1f2a-0788-4b6c-931a-f2a366b40c8c" />
+
+- 카페24 상품 목록 영역에서 상품 사진과 상품 설명 사이 간격을 넓히는 작업을 진행했다.
+
+- 카페24에서 CSS 를 커스텀하려면 먼저 <strong>개발자 도구로 실제 적용되고 있는 CSS 규칙을 확인</strong>해야 한다.
+
+- 이번 정리는 개발자 도구로 우선순위가 적용된 CSS 를 찾고, 실제 카페24 편집기에서 해당 구문을 수정해 상품 사진과 상품 설명 간격을 조정한 기록이다.
+
+<br />
+
+## 문제 상황
+
+카페24는 공통 CSS, 모듈 CSS, 반응형 CSS, 테마별 CSS 가 같이 겹쳐 있기 때문에, 눈에 보이는 간격 하나도 어느 파일의 어떤 선택자가 실제로 적용되고 있는지 먼저 확인해야 한다.
+
+- 같은 요소에 <strong>여러 CSS 규칙이 겹쳐 적용</strong>되고 있는 경우
+
+- <strong>반응형 구간</strong>에서만 다른 margin 값이 들어가는 경우
+
+- 내가 추가한 CSS 보다 기존 <strong>선택자 우선순위</strong>가 더 높은 경우
+
+즉, 카페24 CSS 커스텀은 <strong>현재 적용 중인 규칙을 먼저 찾고 그 다음 실제 수정 파일을 결정하는 방식</strong>으로 접근했다.
+
+<br />
+
+## 개발자 도구로 CSS 적용부 확인
+
+가장 먼저 상품 설명 영역을 개발자 도구로 선택해서, 어떤 선택자가 실제 margin 값을 주고 있는지 확인했다.
+
+<img width="100%" alt="Image" src="https://github.com/user-attachments/assets/b1bcbff7-0650-4f4a-ad10-f1ad95b7cd9a" />
+
+- 상품 설명 영역 선택자는 <strong>.ec-base-product .pdList .description</strong> 으로 잡혀 있었다.
+
+- 반응형 구간에서는 <strong>@media screen and (max-width: 1024px)</strong> 안에서 별도 규칙이 적용되고 있었다.
+  -- <strong>.ec-base-product ul.grid4 .description</strong>
+
+- 기본 규칙과 반응형 규칙 중 반응형 규칙이 최종 적용되고 있는 상황이다.
+
+화면에서 확인했을 때는 단순히 description 의 기본 margin 만 바꾸면 될 것 같았지만, 개발자 도구를 보니 실제로는 <strong>grid4 상품 목록용 선택자</strong>가 따로 정의되고 있었고, 모바일 대응용 미디어쿼리도 적용되는 구조였다.
+
+<br />
+
+## CSS 수정
+
+개발자 도구로 선택자를 확인한 뒤, 카페24 디자인 편집기에서 해당 CSS 파일을 열어 실제 구문을 찾는다.
+
+카페24 경로: <strong>/basic/sub_style.css</strong>
+
+<img width="100%" alt="Image" src="https://github.com/user-attachments/assets/6a6145e2-52e3-46b4-8720-f165dcc52741" />
+
+아래 구문을 원하는 간격으로 수정 후 저장
+
+```css
+.ec-base-product ul.grid4 .description {
+  margin: 30px 0 0 0;
+}
+```
+
+이 값이 상품 이미지와 설명 사이 간격을 만들고 있었기 때문에, 원하는 간격에 맞게 이 margin 값을 줄여서 조정하면 된다.
+
+<br />
+
+## 적용 흐름
+
+1. 개발자 도구로 커스텀이 필요한 요소 선택
+
+2. Styles 탭에서 실제 적용 중인 CSS 선택자와 값 확인
+
+3. 해당 선택자가 들어 있는 카페24 CSS 파일 탐색
+
+4. CSS 파일 수정
+
+5. 반응형 구간에서도 같은 선택자가 따로 있는지 같이 확인
+
+<br />
+
+## 느낀 점
+
+- 카페24 CSS 커스텀은 개발자 도구 없이는 작업하기 어렵다고 느꼈다.
+
+- 눈에 보이는 간격 하나도 실제로는 여러 CSS 규칙이 겹친 결과일 수 있어서, 선택자와 우선순위를 먼저 확인해야 수정 방향이 정확해진다.
